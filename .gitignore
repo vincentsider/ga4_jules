@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+
+# Other
+*.log
+*.swp
+*.swo
+
+# Sensitive Files - DO NOT COMMIT THESE
+# Service account keys, environment variable files, etc.
+*.json
+*service-account*.json
+credentials.json
+*.env
+.env.*
+env.yaml
+secrets.yaml

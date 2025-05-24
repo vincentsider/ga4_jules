@@ -111,47 +111,179 @@ The application needs to know which Google Analytics 4 Property to query.
 *   **Alternatively, update `src/ga4_client.py`:**
     If you do not set the environment variable, the application will try to use the `GA4_PROPERTY_ID` placeholder value defined in `src/ga4_client.py`. You would need to manually edit this file, which is less ideal for configuration.
 
-## Running the Application
+## Running the Application (Command-Line Interface)
+
+The command-line version of the application can be run as described below. For the web interface, see "Web Application Setup" and "Running the Web Application".
 
 Once all the prerequisites and environment variables (`GOOGLE_APPLICATION_CREDENTIALS`, `OPENAI_API_KEY`, and `GA4_PROPERTY_ID`) are set:
 
 1.  Navigate to the root directory of the project in your terminal.
-2.  Run the application using Python:
+2.  Ensure all dependencies are installed (see `requirements.txt`):
+    ```bash
+    pip install -r requirements.txt
+    ```
+3.  Run the command-line application using Python:
 
     ```bash
     python src/app.py
     ```
 
-3.  The application will start, and you can begin asking questions about your GA4 data in the terminal. Type "exit" or "quit" to close the application.
+4.  The application will start, and you can begin asking questions about your GA4 data in the terminal. Type "exit" or "quit" to close the application.
+
+## Web Application Setup
+
+This project also includes a Flask-based web interface. To set it up, you'll need to configure Google OAuth 2.0 credentials.
+
+**1. Install Web Dependencies:**
+   If you haven't already, install all dependencies, including Flask:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+**2. Configure Google OAuth 2.0 Credentials:**
+
+*   **Go to Google Cloud Console:** Navigate to [APIs & Services > Credentials](https://console.cloud.google.com/apis/credentials).
+*   **Create OAuth 2.0 Client ID:**
+    *   Click on "+ CREATE CREDENTIALS" and select "OAuth client ID".
+    *   For "Application type", choose "Web application".
+    *   Give it a name (e.g., "Jules GA4 Web App").
+    *   **Authorized JavaScript origins (Optional but good for security):** You can add `http://localhost:5000`.
+    *   **Authorized redirect URIs:** This is crucial. Click "+ ADD URI" and add:
+        *   `http://localhost:5000/auth/callback` (This exact URI is used by the application).
+        *   If deploying to a different domain or port, you'll need to add those corresponding redirect URIs here as well.
+    *   Click "CREATE".
+*   **Note Your Client ID and Client Secret:** After creation, a dialog will show your "Client ID" and "Client Secret". Copy these values. You will need them for environment variables.
+*   **Scopes Used:** The application requests the following OAuth scopes during authentication:
+    *   `https://www.googleapis.com/auth/analytics.readonly` (to read GA4 data on behalf of the user)
+    *   `openid` (standard OpenID Connect scope)
+    *   `https://www.googleapis.com/auth/userinfo.email` (to get the user's email address)
+    *   `https://www.googleapis.com/auth/userinfo.profile` (to get the user's name and profile picture)
+
+**3. Set Environment Variables for Web App:**
+
+   The web application uses user-specific authentication via Google OAuth. The service account (`GOOGLE_APPLICATION_CREDENTIALS`) is primarily for the command-line version of the app or could be a fallback if user OAuth is not desired for some operations (though the current web app is geared towards user OAuth for GA4 data access).
+
+   You need to set the following environment variables for the web application:
+
+   *   `GOOGLE_OAUTH_CLIENT_ID`: Your OAuth 2.0 Client ID obtained above.
+        ```bash
+        # Example (Linux/macOS)
+        export GOOGLE_OAUTH_CLIENT_ID="your-google-oauth-client-id.apps.googleusercontent.com"
+        # Example (Windows - Command Prompt)
+        set GOOGLE_OAUTH_CLIENT_ID="your-google-oauth-client-id.apps.googleusercontent.com"
+        ```
+   *   `GOOGLE_OAUTH_CLIENT_SECRET`: Your OAuth 2.0 Client Secret obtained above.
+        ```bash
+        # Example (Linux/macOS)
+        export GOOGLE_OAUTH_CLIENT_SECRET="YOUR_CLIENT_SECRET_HERE"
+        # Example (Windows - Command Prompt)
+        set GOOGLE_OAUTH_CLIENT_SECRET="YOUR_CLIENT_SECRET_HERE"
+        ```
+   *   `FLASK_SECRET_KEY`: A strong, random string used by Flask to sign session cookies. This is crucial for security. You can generate one using Python:
+        ```python
+        import os
+        os.urandom(24).hex()
+        ```
+        Then set it as an environment variable:
+        ```bash
+        # Example (Linux/macOS)
+        export FLASK_SECRET_KEY="your_generated_secret_key"
+        # Example (Windows - Command Prompt)
+        set FLASK_SECRET_KEY="your_generated_secret_key"
+        ```
+   *   **(Optional but Recommended) `.env` file:** For easier local development, you can create a `.env` file in the project root directory and store your environment variables there. The `src/web_app.py` is set up to load this file using `python-dotenv`.
+        Example `.env` file content:
+        ```
+        OPENAI_API_KEY="your-openai-api-key"
+        GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/service-account-key.json"
+        GA4_PROPERTY_ID="your-ga4-property-id"
+        GOOGLE_OAUTH_CLIENT_ID="your-google-oauth-client-id.apps.googleusercontent.com"
+        GOOGLE_OAUTH_CLIENT_SECRET="YOUR_CLIENT_SECRET_HERE"
+        FLASK_SECRET_KEY="your_generated_secret_key"
+        # Optional: If you want to override the default redirect URI
+        # GOOGLE_REDIRECT_URI="http://localhost:5000/auth/callback" 
+        ```
+        **Ensure `.env` is listed in your `.gitignore` file and never committed to version control.**
+
+**4. OAuth Flow Overview:**
+   * User clicks "Sign in with Google".
+   * They are redirected to Google's OAuth consent screen where they approve the requested scopes.
+   * Google redirects back to the application's `/auth/callback` URI with an authorization code.
+   * The application exchanges this code for an access token and a refresh token.
+   * User's credentials (including the refresh token for offline access) and profile information are stored in the Flask session (server-side cookie).
+   * The `ga4_client.py` module's `get_report_with_user_creds` function uses these stored credentials to make API calls. It can also refresh the access token if it expires, using the refresh token.
+
+## Running the Web Application
+
+Once the prerequisites, general environment variables, and web-specific environment variables are set:
+
+1.  Navigate to the root directory of the project.
+2.  Run the Flask web application:
+    ```bash
+    python src/web_app.py
+    ```
+3.  Open your web browser and go to `http://localhost:5000`. You should see the login page.
 
 ## Security and Privacy Best Practices
 
-It is crucial to handle API keys, sensitive data, and user privacy responsibly when using this application.
+It is crucial to handle API keys, user credentials, sensitive data, and user privacy responsibly when using this application, especially with the introduction of the web interface and Google OAuth 2.0.
 
-### 1. API Key Security
+### 1. Credentials and Configuration Security
 
-*   **Use Environment Variables:** Always use environment variables to manage your `OPENAI_API_KEY`, `GA4_PROPERTY_ID`, and the file path for `GOOGLE_APPLICATION_CREDENTIALS`. This application is designed to read these from your environment.
-*   **Never Hardcode Keys:** **Do NOT hardcode your API keys or property ID directly into the source code.** Hardcoding sensitive credentials is a significant security risk.
-*   **Do Not Commit Keys to Version Control:**
-    *   Ensure that your actual API key values and your Google service account JSON key file (e.g., `your-service-account-credentials.json`) are **NEVER** committed to Git or any other version control system.
-    *   The `.gitignore` file in this project is configured to ignore common patterns for these sensitive files (e.g., `*.json`, `*.env`, `credentials.json`). However, you are still responsible for ensuring these files remain local and secure. Double-check that your specific key file names are covered or add them to your local or global `.gitignore` if they are not.
-    *   If you accidentally commit a key, you should revoke it immediately and rotate to a new key.
+*   **Environment Variables are Key:**
+    *   **OpenAI API Key (`OPENAI_API_KEY`):** Used for NLU and response generation. Keep this confidential.
+    *   **Google Service Account (for CLI - `GOOGLE_APPLICATION_CREDENTIALS`, `GA4_PROPERTY_ID`):** The JSON key file for the service account (if using the CLI version primarily) must be kept secure. The `GA4_PROPERTY_ID` specifies which property this service account accesses.
+    *   **Google OAuth 2.0 Client Credentials (for Web App - `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`):** These are used by the Flask web application to authenticate users with their Google accounts. They must be kept confidential. **Never commit them directly to version control.**
+    *   **Flask Secret Key (`FLASK_SECRET_KEY`):** This is critical for securing Flask sessions, which store user authentication information. Use a long, random, and unique string.
+*   **Never Hardcode Credentials:** Do NOT hardcode any of these sensitive values directly into the source code.
+*   **`.gitignore`:** The project's `.gitignore` file is configured to ignore common sensitive file names (like `*.json`, `*.env`). Always double-check that your specific credential files (especially service account JSON files and `.env` files) are not committed to version control. If you accidentally commit sensitive credentials, revoke them immediately and generate new ones.
+*   **Redirect URIs (for Web App):**
+    *   In the Google Cloud Console, the "Authorized redirect URIs" for your OAuth 2.0 Client ID must be configured precisely. For local development, this is typically `http://localhost:5000/auth/callback`.
+    *   **For production, always use HTTPS for your redirect URIs.** This is essential for security.
+*   **OAuth Scopes (for Web App):** The application requests the following scopes during user authentication:
+    *   `https://www.googleapis.com/auth/analytics.readonly`: To read Google Analytics 4 data on behalf of the authenticated user.
+    *   `openid`: Standard OpenID Connect scope, used for authentication.
+    *   `https://www.googleapis.com/auth/userinfo.email`: To retrieve the user's email address for identification and display.
+    *   `https://www.googleapis.com/auth/userinfo.profile`: To retrieve the user's name and profile picture for a personalized experience.
+    Users will be asked to consent to these scopes when they first log in.
 
-### 2. Data Handling
+### 2. Session Management (for Web App)
 
-*   **In-Memory Processing:** This application processes your Google Analytics 4 data and your natural language queries primarily in memory. By default, it does not store this information persistently (e.g., in databases or local files).
-*   **Third-Party Services:**
-    *   When you ask a query, parts of your query and potentially the summarized GA4 data are sent to the **OpenAI API** to generate natural language responses or parse your query.
-    *   Your interactions with **Google Analytics Data API** are governed by Google's terms.
-    *   You should review the privacy policies and terms of service for both OpenAI and Google Cloud / Google Analytics to understand how they handle data sent to their services.
-    *   **OpenAI Data Usage:** By default, data sent to the OpenAI API may be used to train future models unless you have a specific agreement with OpenAI (e.g., through an enterprise plan or by opting out via their defined processes, if available). For sensitive data, explore options like Azure OpenAI Service which may offer different data privacy commitments, or check current OpenAI policies for business users. The client library itself does not typically offer a `store=false` parameter for individual API calls to control OpenAI's data retention for training; this is usually managed at the account level or through specific API versions/endpoints if offered by OpenAI.
+*   **Flask Sessions:** The web application uses Flask's session mechanism to store user authentication state and Google OAuth tokens (access and refresh tokens). These sessions are typically cookie-based by default.
+*   **`FLASK_SECRET_KEY`:** A strong, randomly generated `FLASK_SECRET_KEY` is essential for securing these sessions. If this key is compromised, attackers could potentially tamper with session data.
+*   **Production Considerations:** While Flask's default cookie-based sessions are convenient for development, for production environments handling sensitive tokens (like refresh tokens which can be long-lived), consider using server-side sessions (e.g., with Flask-Session and a backend like Redis or a database). This can mitigate risks if the `FLASK_SECRET_KEY` is ever compromised, as the tokens themselves are not directly stored in the client-side cookie.
 
-### 3. Compliance
+### 3. User Token Handling (for Web App)
 
-*   **Adhere to Regulations:** You are responsible for ensuring that your use of this tool, your Google Analytics 4 data, and your interactions with the OpenAI API comply with all relevant data protection regulations in your jurisdiction (e.g., GDPR, CCPA, HIPAA if applicable).
-*   **User Consent:** If you are using this tool in a context where you are processing data on behalf of others or for users of your services, ensure you have appropriate consents and provide necessary disclosures.
+*   **Storage:** User access tokens and refresh tokens obtained via Google OAuth 2.0 are stored in the Flask session.
+*   **Purpose:**
+    *   **Access Tokens:** Short-lived tokens used by the server-side application (`web_app.py`) to make authorized API calls to the Google Analytics Data API on behalf of the logged-in user.
+    *   **Refresh Tokens:** Longer-lived tokens used to obtain new access tokens when the current access token expires, allowing the user to stay logged in without re-authenticating frequently. The `ga4_client.py` module handles this refresh logic.
+*   **Security:** These tokens are sensitive. The security of the Flask session (and thus the `FLASK_SECRET_KEY`) is paramount to protect them.
 
-By using this application, you acknowledge your responsibility for securing your API keys and adhering to privacy and compliance requirements.
+### 4. CSRF (Cross-Site Request Forgery) Protection
+
+*   **OAuth Flow:** The Google OAuth 2.0 flow implemented uses a `state` parameter for validation during the authentication redirect process. This is a standard mechanism to protect against CSRF attacks during login.
+*   **AJAX Endpoints (`/chat`):**
+    *   Standard browser Same-Origin Policies provide a baseline level of protection for AJAX requests like the one made by the chat interface.
+    *   For enhanced security in a production environment, especially if the application were to handle more sensitive operations via POST requests, implementing specific anti-CSRF token mechanisms (e.g., using Flask-WTF or custom tokens) for AJAX requests would be a good practice. For the current scope (reading GA4 data based on user queries), the existing setup provides a reasonable level of protection.
+
+### 5. Data Handling (Reiteration and Web Context)
+
+*   **In-Memory Processing:** The application (both CLI and web versions) processes Google Analytics 4 data and user queries primarily in memory for the duration of a request.
+*   **User-Specific Data (Web App):** In the web application, GA4 data is fetched by the server using the authenticated user's own OAuth tokens. This means the application only accesses GA4 properties that the logged-in user has permission to view.
+*   **Third-Party Services (OpenAI):**
+    *   User queries (and potentially summarized GA4 data included in prompts) are sent to the **OpenAI API** for natural language understanding and response generation.
+    *   Review OpenAI's data usage and privacy policies to understand how they handle data sent to their services. Consider any implications for data residency and model training opt-outs if relevant.
+*   **Google Analytics Data API:** Interactions with this API are governed by Google's terms and privacy policies.
+
+### 6. General Security Advice
+
+*   **HTTPS in Production:** Always run the web application over HTTPS in a production environment to protect all traffic, including OAuth tokens and user data, in transit.
+*   **Keep Dependencies Updated:** Regularly update all project dependencies (Flask, Google client libraries, OpenAI library, etc.) to their latest stable versions to incorporate security patches and improvements. Use tools like `pip list --outdated` and consider automated dependency scanning.
+*   **Principle of Least Privilege:** Ensure that the OAuth scopes requested are strictly necessary for the application's functionality. The current scopes (`analytics.readonly`, `openid`, `email`, `profile`) are appropriate for the described features.
+
+By using this application, you acknowledge your responsibility for securing your credentials, managing user data appropriately, and adhering to all relevant privacy and compliance requirements.
 
 ## Running Tests
 

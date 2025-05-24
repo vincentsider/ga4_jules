@@ -1,0 +1,10 @@
+# Core Application Dependencies
+google-analytics-data
+openai
+
+# Web Application Dependencies
+Flask
+requests # For OAuth token exchange
+google-auth # For verifying ID tokens
+google-auth-oauthlib # For Google OAuth flow
+python-dotenv # For managing environment variables (optional but good practice)
